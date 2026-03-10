@@ -1,0 +1,563 @@
+// ============================================================
+// schema.prisma — Ecommerce Multi-Tenant
+// Motor: PostgreSQL 16 | ORM: Prisma
+// Generado por: Agente DBA
+// Fecha: 2026-02-27
+// ============================================================
+//
+// Estrategia de concurrencia:
+//   - variantes y cupones: pessimistic locking (SELECT FOR UPDATE en la capa de aplicación)
+//   - resto de tablas de escritura concurrente: optimistic locking vía campo `version`
+//
+// Multi-tenant: campo `empresa_id` obligatorio en todas las tablas de tenant
+// Soft delete: campo `deleted_at DateTime?` en todas las tablas
+// Auditoría: `created_at` y `updated_at` en todas las tablas
+// IDs: String @id @default(cuid())
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// 1. SUPER_ADMINS
+// Usuarios con acceso global al sistema (no pertenecen a ninguna empresa)
+// ============================================================
+model SuperAdmin {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  password_hash  String
+  token_version  Int       @default(1)
+
+  // Soft delete
+  deleted_at     DateTime?
+
+  // Auditoría
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  @@map("super_admins")
+}
+
+// ============================================================
+// 2. EMPRESAS
+// Cada empresa es un tenant independiente del sistema
+// ============================================================
+model Empresa {
+  id                  String    @id @default(cuid())
+  nombre              String
+  nit                 String?   @unique
+  subdominio          String    @unique
+  portal_company_id   String?   @unique
+  plan                String    @default("basic")
+  activa              Boolean   @default(true)
+
+  // Soft delete
+  deleted_at          DateTime?
+
+  // Auditoría
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  // Relaciones
+  admins              AdminEmpresa[]
+  categorias          Categoria[]
+  productos           Producto[]
+  variantes           Variante[]
+  imagenes_producto   ImagenProducto[]
+  carritos            Carrito[]
+  carrito_items       CarritoItem[]
+  pedidos             Pedido[]
+  promocionesEspeciales PromocionEspecial[]
+  configuracion       ConfiguracionEmpresa?
+  cupones             Cupon[]
+  clientes            Cliente[]
+  colecciones         Coleccion[]
+
+  @@map("empresas")
+}
+
+// ============================================================
+// 14. CLIENTES
+// Clientes que han realizado pedidos en la tienda
+// ============================================================
+model Cliente {
+  id         String    @id @default(cuid())
+  empresa_id String
+  telefono   String
+  nombre     String?
+  email      String?
+  notas      String?
+
+  // Soft delete
+  deleted_at DateTime?
+
+  // Auditoría
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  // Relaciones
+  empresa    Empresa   @relation(fields: [empresa_id], references: [id])
+
+  // Unicidad: un teléfono por empresa
+  @@unique([empresa_id, telefono])
+
+  // Índices
+  @@index([empresa_id])
+  @@index([empresa_id, deleted_at])
+
+  @@map("clientes")
+}
+
+// ============================================================
+// 3. ADMIN_EMPRESA
+// Administradores de cada empresa (tenant)
+// ============================================================
+model AdminEmpresa {
+  id             String    @id @default(cuid())
+  empresa_id     String
+  nombre         String
+  email          String    @unique
+  password_hash  String
+  token_version  Int       @default(1)
+  rol            String    @default("admin")
+
+  // Soft delete
+  deleted_at     DateTime?
+
+  // Auditoría
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  // Relaciones
+  empresa        Empresa   @relation(fields: [empresa_id], references: [id])
+
+  // Índices
+  @@index([empresa_id])
+  @@index([empresa_id, deleted_at])
+
+  @@map("admin_empresa")
+}
+
+// ============================================================
+// 4. CATEGORIAS
+// Categorías de productos con soporte para subcategorías (árbol auto-referenciado)
+// ============================================================
+model Categoria {
+  id             String      @id @default(cuid())
+  empresa_id     String
+  nombre         String
+  slug           String
+  descripcion    String?
+  padre_id       String?
+  orden          Int         @default(0)
+  version        Int         @default(1)
+
+  // Soft delete
+  deleted_at     DateTime?
+
+  // Auditoría
+  created_at     DateTime    @default(now())
+  updated_at     DateTime    @updatedAt
+
+  // Relaciones
+  empresa        Empresa     @relation(fields: [empresa_id], references: [id])
+  padre          Categoria?  @relation("SubCategorias", fields: [padre_id], references: [id])
+  subcategorias  Categoria[] @relation("SubCategorias")
+  productos      Producto[]
+
+  // Índices
+  @@index([empresa_id])
+  @@index([empresa_id, deleted_at])
+
+  @@map("categorias")
+}
+
+// ============================================================
+// 5. PRODUCTOS
+// Catálogo de productos por empresa
+// ============================================================
+model Producto {
+  id             String      @id @default(cuid())
+  empresa_id     String
+  categoria_id   String?
+  nombre         String
+  slug           String
+  descripcion    String?
+  precio_base    Decimal     @db.Decimal(10, 2)
+  activo         Boolean     @default(true)
+  destacado      Boolean     @default(false)
+  en_promocion   Boolean     @default(false)
+  atributos      Json?
+  version        Int         @default(1)
+
+  // Soft delete
+  deleted_at     DateTime?
+
+  // Auditoría
+  created_at     DateTime    @default(now())
+  updated_at     DateTime    @updatedAt
+
+  // Relaciones
+  empresa        Empresa     @relation(fields: [empresa_id], references: [id])
+  categoria      Categoria?  @relation(fields: [categoria_id], references: [id])
+  variantes      Variante[]
+  imagenes       ImagenProducto[]
+  colecciones    ColeccionProducto[]
+
+  // Índices
+  @@index([empresa_id])
+  @@index([empresa_id, deleted_at])
+  @@index([empresa_id, activo])
+
+  @@map("productos")
+}
+
+// ============================================================
+// 6. VARIANTES
+// Variantes de productos (talle, color, etc.)
+// Concurrencia: pessimistic locking (SELECT FOR UPDATE) en capa de aplicación
+// ============================================================
+model Variante {
+  id             String      @id @default(cuid())
+  producto_id    String
+  empresa_id     String
+  sku            String
+  nombre         String
+  precio         Decimal     @db.Decimal(10, 2)
+  stock          Int         @default(0)
+  atributos      Json?
+  activa         Boolean     @default(true)
+
+  // Soft delete
+  deleted_at     DateTime?
+
+  // Auditoría
+  created_at     DateTime    @default(now())
+  updated_at     DateTime    @updatedAt
+
+  // Relaciones
+  producto       Producto    @relation(fields: [producto_id], references: [id])
+  empresa        Empresa     @relation(fields: [empresa_id], references: [id])
+  carrito_items  CarritoItem[]
+
+  // Restricciones de unicidad
+  @@unique([empresa_id, sku])
+
+  // Índices
+  @@index([empresa_id])
+  @@index([empresa_id, deleted_at])
+  @@index([producto_id])
+
+  @@map("variantes")
+}
+
+// ============================================================
+// 7. IMAGENES_PRODUCTO
+// Imágenes asociadas a productos
+// ============================================================
+model ImagenProducto {
+  id             String    @id @default(cuid())
+  producto_id    String
+  empresa_id     String
+  url            String
+  orden          Int       @default(0)
+  es_principal   Boolean   @default(false)
+
+  // Soft delete
+  deleted_at     DateTime?
+
+  // Auditoría
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  // Relaciones
+  producto       Producto  @relation(fields: [producto_id], references: [id])
+  empresa        Empresa   @relation(fields: [empresa_id], references: [id])
+
+  // Índices
+  @@index([empresa_id])
+  @@index([empresa_id, deleted_at])
+  @@index([producto_id])
+
+  @@map("imagenes_producto")
+}
+
+// ============================================================
+// 8. CARRITO
+// Carrito de compras por usuario y empresa
+// Nota: Prisma no soporta partial unique indexes nativos.
+// La unicidad de carrito activo por usuario se maneja a nivel de aplicación.
+// Se usa @@index([empresa_id, usuario_id]) para queries eficientes.
+// ============================================================
+model Carrito {
+  id             String        @id @default(cuid())
+  empresa_id     String
+  usuario_id     String
+  estado         String        @default("activo")
+  version        Int           @default(1)
+
+  // Soft delete
+  deleted_at     DateTime?
+
+  // Auditoría
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+
+  // Relaciones
+  empresa        Empresa       @relation(fields: [empresa_id], references: [id])
+  items          CarritoItem[]
+
+  // Índices
+  @@index([empresa_id])
+  @@index([empresa_id, usuario_id])
+  @@index([empresa_id, deleted_at])
+
+  @@map("carrito")
+}
+
+// ============================================================
+// 9. CARRITO_ITEMS
+// Ítems individuales del carrito de compras
+// ============================================================
+model CarritoItem {
+  id                String    @id @default(cuid())
+  carrito_id        String
+  variante_id       String
+  empresa_id        String
+  cantidad          Int       @default(1)
+  precio_unitario   Decimal   @db.Decimal(10, 2)
+
+  // Soft delete
+  deleted_at        DateTime?
+
+  // Auditoría
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  // Relaciones
+  carrito           Carrito   @relation(fields: [carrito_id], references: [id])
+  variante          Variante  @relation(fields: [variante_id], references: [id])
+  empresa           Empresa   @relation(fields: [empresa_id], references: [id])
+
+  // Restricciones de unicidad
+  @@unique([carrito_id, variante_id])
+
+  // Índices
+  @@index([empresa_id])
+  @@index([empresa_id, deleted_at])
+
+  @@map("carrito_items")
+}
+
+// ============================================================
+// 10. PEDIDOS
+// Pedidos del checkout WhatsApp — sin usuario, con datos de cliente directo
+// ============================================================
+model Pedido {
+  id                  String        @id @default(cuid())
+  empresa_id          String
+  cliente_nombre      String
+  cliente_email       String?
+  cliente_telefono    String
+  cliente_direccion   String?
+  notas               String?
+  items               Json          // Array de {varianteId, productoId, nombre, variante, precio, cantidad}
+  total               Decimal       @db.Decimal(12, 2)
+  estado              EstadoPedido  @default(pendiente)
+  whatsapp_enviado    Boolean       @default(false)
+
+  // Auditoría
+  created_at          DateTime      @default(now())
+  updated_at          DateTime      @updatedAt
+
+  // Relaciones
+  empresa             Empresa       @relation(fields: [empresa_id], references: [id])
+
+  // Índices
+  @@index([empresa_id])
+  @@index([empresa_id, estado])
+  @@index([created_at])
+
+  @@map("pedidos")
+}
+
+enum EstadoPedido {
+  pendiente
+  confirmado
+  procesando
+  enviado
+  entregado
+  cancelado
+}
+
+// ============================================================
+// 12. CONFIGURACION_EMPRESA
+// Configuración única por empresa (1:1 con empresas)
+// ============================================================
+model ConfiguracionEmpresa {
+  id               String    @id @default(cuid())
+  empresa_id       String    @unique
+  moneda           String    @default("ARS")
+  idioma           String    @default("es")
+  tema             Json?
+  metodos_pago     Json?
+  datos_tienda     Json?
+  version          Int       @default(1)
+
+  // Auditoría (sin soft delete: la config es inseparable de la empresa)
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  // Relaciones
+  empresa          Empresa   @relation(fields: [empresa_id], references: [id])
+
+  @@map("configuracion_empresa")
+}
+
+// ============================================================
+// 13. CUPONES
+// Cupones de descuento por empresa
+// Concurrencia: pessimistic locking (SELECT FOR UPDATE) en capa de aplicación
+// ============================================================
+model Cupon {
+  id              String    @id @default(cuid())
+  empresa_id      String
+  codigo          String
+  tipo            String
+  valor           Decimal   @db.Decimal(10, 2)
+  usos_actuales   Int       @default(0)
+  usos_maximos    Int?
+  monto_minimo    Decimal?  @db.Decimal(10, 2)
+  valido_desde    DateTime
+  valido_hasta    DateTime?
+  activo          Boolean   @default(true)
+
+  // Soft delete
+  deleted_at      DateTime?
+
+  // Auditoría
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  // Relaciones
+  empresa         Empresa   @relation(fields: [empresa_id], references: [id])
+
+  // Restricciones de unicidad
+  @@unique([empresa_id, codigo])
+
+  // Índices
+  @@index([empresa_id])
+  @@index([empresa_id, deleted_at])
+
+  @@map("cupones")
+}
+
+// ============================================================
+// 15. COLECCIONES
+// Agrupaciones manuales de productos por empresa (ej: "Novedades", "Ofertas")
+// ============================================================
+model Coleccion {
+  id             String    @id @default(cuid())
+  empresa_id     String
+  nombre         String
+  slug           String
+  descripcion    String?
+  imagen_url     String?
+  activa         Boolean   @default(true)
+  orden          Int       @default(0)
+
+  // Soft delete
+  deleted_at     DateTime?
+
+  // Auditoría
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  // Relaciones
+  empresa        Empresa   @relation(fields: [empresa_id], references: [id])
+  productos      ColeccionProducto[]
+
+  // Restricciones de unicidad
+  @@unique([empresa_id, slug])
+
+  // Índices
+  @@index([empresa_id])
+  @@index([empresa_id, activa])
+  @@index([empresa_id, deleted_at])
+
+  @@map("colecciones")
+}
+
+// ============================================================
+// 16. COLECCION_PRODUCTOS
+// Tabla de unión entre colecciones y productos (junction table)
+// ============================================================
+model ColeccionProducto {
+  coleccion_id   String
+  producto_id    String
+  orden          Int       @default(0)
+
+  // Relaciones
+  coleccion      Coleccion @relation(fields: [coleccion_id], references: [id])
+  producto       Producto  @relation(fields: [producto_id], references: [id])
+
+  // PK compuesta
+  @@id([coleccion_id, producto_id])
+
+  // Índices
+  @@index([producto_id])
+
+  @@map("coleccion_productos")
+}
+
+// ============================================================
+// PROMOCIONES ESPECIALES (2x1, porcentaje, bundle)
+// ============================================================
+
+enum TipoPromocion {
+  dos_x_uno
+  porcentaje
+  bundle
+}
+
+model PromocionEspecial {
+  id               String        @id @default(cuid())
+  empresa_id       String
+  empresa          Empresa       @relation(fields: [empresa_id], references: [id])
+
+  nombre           String
+  descripcion      String?
+  imagen_url       String?
+  tipo             TipoPromocion
+
+  // Para 2x1 o N x M: compra compra_cantidad y paga llevas_cantidad
+  compra_cantidad  Int?          // ej: 2
+  llevas_cantidad  Int?          // ej: 1 (llevas 2 pagas 1)
+
+  // Para porcentaje
+  porcentaje       Float?        // ej: 20.0 = 20% descuento
+
+  // Precio referencial (original) y precio final que paga el cliente
+  precio_original  Decimal?      @db.Decimal(12, 2)
+  precio_final     Decimal       @db.Decimal(12, 2)
+
+  // Productos a los que aplica (array de product IDs en JSON)
+  productos_ids    Json?         // ["id1","id2",...]
+
+  activa           Boolean       @default(true)
+  fecha_inicio     DateTime?
+  fecha_fin        DateTime?
+  version          Int           @default(1)
+
+  created_at       DateTime      @default(now())
+  updated_at       DateTime      @updatedAt
+
+  @@index([empresa_id])
+  @@index([empresa_id, activa])
+  @@map("promociones_especiales")
+}

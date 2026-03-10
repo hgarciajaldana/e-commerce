@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Session/runtime files
+gerente_session.json
+chat.json
+*_session.json
+
+# Uploads
+uploads/
+
+# Prisma generated
+agents/backend/prisma/generated/
+
+# Test coverage
+coverage/
+
+# Agent context (runtime)
+agents/agente_contexto/

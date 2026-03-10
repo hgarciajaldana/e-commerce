@@ -1,0 +1,157 @@
+# ============================================================================
+# docker-compose.yml — Ecommerce Multi-Tenant
+# Un solo comando levanta todo: docker compose up -d
+#
+# Servicios principales (arrancan siempre):
+#   postgres   — Base de datos PostgreSQL 16
+#   backend    — API Node.js 20 + Express + Prisma  → puerto 4001
+#   frontend   — Next.js 14                         → puerto 4002
+#
+# Servicios opcionales (profile=tools):
+#   pgadmin    — Administración DB (docker compose --profile tools up -d)
+#
+# Requisitos:
+#   cp .env.example .env && nano .env   ← solo POSTGRES_PASSWORD es obligatoria
+#   cp agents/backend/.env.example agents/backend/.env && nano agents/backend/.env
+#
+# Levantamiento:
+#   docker compose up -d               ← levanta postgres + backend + frontend
+#   docker compose --profile tools up  ← además levanta pgadmin
+#
+# Versión imagen: 1.0.0
+# ============================================================================
+
+services:
+
+  # ── PostgreSQL 16 ─────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: ecomerce_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-proyecto_a}
+      POSTGRES_USER: ${POSTGRES_USER:-proyecto_a}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required — ver .env.example}
+    ports:
+      - "5435:5432"   # 5432-5434 ocupados por otros proyectos — acceder desde host vía 5435
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-proyecto_a} -d ${POSTGRES_DB:-proyecto_a}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - ecomerce_net
+
+  # ── Backend — Node.js 20 + Express + Prisma ───────────────────────────────
+  backend:
+    build:
+      context: ./agents/backend
+      dockerfile: Dockerfile
+      target: production
+    image: ecomerce/backend:1.0.0
+    container_name: ecomerce_backend
+    restart: unless-stopped
+    env_file:
+      - ./agents/backend/.env
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: "4001"
+      # DATABASE_URL sobreescribe el valor del .env para apuntar al postgres del compose
+      DATABASE_URL: postgresql://${POSTGRES_USER:-proyecto_a}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-proyecto_a}
+    ports:
+      - "4001:4001"
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Ejecuta migraciones + seed antes de arrancar el servidor
+    # Nota: prisma.config.ts usa dotenv/config, por lo que necesita un .env file con DATABASE_URL
+    # (Prisma v7 no lee DATABASE_URL del env del sistema directamente en el config file)
+    command: >
+      sh -c "
+        echo '[backend] Preparando entorno...' &&
+        echo "DATABASE_URL=$$DATABASE_URL" > /app/.env &&
+        echo '[backend] Corriendo migraciones...' &&
+        npx prisma migrate deploy &&
+        echo '[backend] Ejecutando seed...' &&
+        npx prisma db seed || echo '[backend] Seed omitido (ya existe o no definido)' &&
+        echo '[backend] Iniciando servidor en puerto 4001...' &&
+        node dist/server.js
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ecomerce_net
+
+  # ── Frontend — Next.js 14 ─────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./agents/frontend
+      dockerfile: Dockerfile
+      target: production
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api-ecommerce.operly.tech}
+        NEXT_PUBLIC_APP_DOMAIN: ${NEXT_PUBLIC_APP_DOMAIN:-ecommerce.operly.tech}
+    image: ecomerce/frontend:1.0.0
+    container_name: ecomerce_frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: "4002"
+    ports:
+      - "4002:4002"    # requiere que el dev server de Next.js (npm run dev) esté detenido
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4002 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - ecomerce_net
+
+  # ── PgAdmin 4 (profile: tools — no se levanta por defecto) ────────────────
+  # Uso: docker compose --profile tools up -d
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: ecomerce_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@ecomerce.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    profiles:
+      - tools
+    networks:
+      - ecomerce_net
+
+# ── Redes ──────────────────────────────────────────────────────────────────────
+networks:
+  ecomerce_net:
+    name: ecomerce_net
+    driver: bridge
+
+# ── Volúmenes persistentes ─────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    name: ecomerce_postgres_data
+  pgadmin_data:
+    name: ecomerce_pgadmin_data
+  uploads_data:
+    name: ecomerce_uploads_data
