@@ -3,5 +3,17 @@
     "allow": ["Bash(*)", "Read(*)", "Edit(*)", "Write(*)", "MultiEdit(*)", "WebFetch(*)", "WebSearch(*)", "TodoWrite", "TodoRead"],
     "deny": []
   },
-  "defaultMode": "bypassPermissions"
+  "defaultMode": "bypassPermissions",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ../../.claude/hooks/check-completion.sh"
+          }
+        ]
+      }
+    ]
+  }
 }

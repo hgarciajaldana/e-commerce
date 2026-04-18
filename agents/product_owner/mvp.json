@@ -1,0 +1,68 @@
+{
+  "proyecto": "ecomerce-multi-tenant",
+  "version_mvp": "1.0",
+  "fecha_definicion": "2026-02-24",
+  "objetivo_mvp": "Plataforma multi-empresa donde cada empresa tiene su subdominio con catálogo de productos y checkout vía WhatsApp, administrable desde un panel propio, gestionada globalmente por un super admin.",
+  "alcance_mvp": {
+    "portal_publico": {
+      "incluye": [
+        "Catálogo de productos activos por empresa (nombre, precio, imagen, descripción)",
+        "Vista de detalle de producto",
+        "Carrito de compras acumulativo (sin cuenta de usuario)",
+        "Checkout: redirección a WhatsApp con número de la empresa y listado del pedido"
+      ],
+      "no_incluye": [
+        "Búsqueda o filtrado de productos",
+        "Cuentas de usuario cliente",
+        "Historial de pedidos",
+        "Categorías de productos",
+        "Pasarela de pagos"
+      ]
+    },
+    "panel_admin_empresa": {
+      "incluye": [
+        "Autenticación (login/logout) con correo y contraseña",
+        "Gestión de productos: crear, editar, activar, desactivar",
+        "Subida de imagen por archivo (JPG/PNG/WEBP, máx 5MB) o URL externa",
+        "Configuración de número de WhatsApp",
+        "Configuración de datos de contacto opcionales (redes sociales, teléfono, correo)",
+        "Gestión de usuarios admin de la empresa (crear, desactivar)"
+      ],
+      "no_incluye": [
+        "Reportes o analytics",
+        "Gestión de pedidos (los pedidos van a WhatsApp)",
+        "Personalización de diseño/tema de la tienda",
+        "Dominio personalizado (solo subdominio de la plataforma)"
+      ]
+    },
+    "panel_super_admin": {
+      "incluye": [
+        "Autenticación separada del panel de empresa",
+        "Crear empresas con subdominio único y admin inicial",
+        "Listar y buscar empresas",
+        "Activar y desactivar empresas",
+        "Editar nombre de empresa"
+      ],
+      "no_incluye": [
+        "Métricas globales de la plataforma",
+        "Gestión de facturación a empresas",
+        "Configuración de límites por empresa (plan/tier)"
+      ]
+    }
+  },
+  "historias_mvp_must": [
+    "US-001", "US-002", "US-003", "US-004", "US-005",
+    "US-006", "US-007", "US-008", "US-009",
+    "US-010",
+    "US-013",
+    "US-014", "US-015", "US-016"
+  ],
+  "historias_mvp_should": [
+    "US-011",
+    "US-012"
+  ],
+  "decisiones_base": [
+    "DEC-001", "DEC-002", "DEC-003", "DEC-004", "DEC-005", "DEC-006"
+  ],
+  "criterio_done_mvp": "El MVP estará completo cuando un super admin pueda crear una empresa, la empresa pueda cargar su catálogo y configurar su WhatsApp, y un cliente final pueda navegar el catálogo, armar un carrito y enviar su pedido por WhatsApp."
+}

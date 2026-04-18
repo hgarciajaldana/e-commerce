@@ -1,0 +1,522 @@
+// ============================================================================
+// schema.prisma — Ecommerce Multi-Tenant
+// Motor: PostgreSQL 16 | ORM: Prisma 5
+// Agente: DBA | Fecha: 2026-02-27
+// ============================================================================
+//
+// Estrategia de concurrencia:
+//   - variantes.stock         → pessimistic locking (SELECT FOR UPDATE en app)
+//   - cupones.usos_actuales   → pessimistic locking (SELECT FOR UPDATE en app)
+//   - empresas, categorias, productos, pedidos, carritos
+//                             → optimistic locking vía campo `version INT`
+//
+// Multi-tenant  : empresa_id obligatorio en todas las tablas de tenant
+// Soft delete   : deleted_at DateTime? en tablas críticas
+// Auditoría     : created_at + updated_at en todas las tablas
+// IDs           : String @id @default(uuid()) @db.Uuid
+//
+// ÍNDICE PARCIAL (ejecutar manualmente tras `prisma migrate dev`):
+//   CREATE UNIQUE INDEX productos_nombre_empresa_unique
+//   ON productos (empresa_id, LOWER(nombre))
+//   WHERE deleted_at IS NULL;
+//   -- RN-032: unicidad de nombre de producto por empresa, case-insensitive.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// 1. SUPER_ADMINS
+// Administradores globales de la plataforma — sin empresa_id.
+// token_version: invalidación de JWT ante desactivación o revocación de acceso.
+// ============================================================================
+model SuperAdmin {
+  id            String    @id @default(uuid()) @db.Uuid
+  email         String    @unique
+  password_hash String
+  nombre        String
+  activo        Boolean   @default(true)
+  token_version Int       @default(0)  // Invalidación JWT: incrementar = invalida todos los tokens activos
+
+  // Soft delete
+  deleted_at    DateTime?
+
+  // Auditoría
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  @@map("super_admins")
+}
+
+// ============================================================================
+// 2. EMPRESAS
+// Cada fila es un tenant independiente del sistema.
+// token_version: al desactivar empresa, invalidar JWTs de TODOS sus admin_empresa.
+// version: optimistic locking — UPDATE SET version=version+1 WHERE version=? → 409 si 0 rows.
+// ============================================================================
+model Empresa {
+  id               String   @id @default(uuid()) @db.Uuid
+  nombre           String
+  slug             String   @unique  // Subdominio: slug.plataforma.com
+  activa           Boolean  @default(true)
+  token_version    Int      @default(0)  // Invalidación JWT masiva al desactivar empresa
+  version          Int      @default(0)  // Optimistic locking para ediciones de configuración
+
+  // Datos de contacto opcionales
+  whatsapp_numero   String?  // Formato E.164, ej: +5219991234567
+  nombre_contacto   String?
+  correo_contacto   String?
+  redes_sociales    Json?    // JSONB: { instagram?, facebook?, tiktok?, twitter? }
+
+  // Soft delete
+  deleted_at       DateTime?
+
+  // Auditoría
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  // Relaciones
+  admins            AdminEmpresa[]
+  categorias        Categoria[]
+  productos         Producto[]
+  variantes         Variante[]
+  imagenes_producto ImagenProducto[]
+  carritos          Carrito[]
+  carrito_items     CarritoItem[]
+  pedidos           Pedido[]
+  pedido_items      PedidoItem[]
+  configuracion     ConfiguracionEmpresa?
+  cupones           Cupon[]
+
+  // Índices
+  @@index([activa, deleted_at])
+
+  @@map("empresas")
+}
+
+// ============================================================================
+// 3. ADMIN_EMPRESA
+// Administradores por empresa (tenant).
+// token_version: invalidación JWT al desactivar admin o al desactivar su empresa.
+// require_password_change: fuerza cambio en primer acceso.
+// ============================================================================
+model AdminEmpresa {
+  id                      String   @id @default(uuid()) @db.Uuid
+  empresa_id              String   @db.Uuid
+  email                   String   @unique  // Único en toda la plataforma (RN-049)
+  password_hash           String
+  nombre                  String
+  rol                     String   @default("admin")
+  activo                  Boolean  @default(true)
+  token_version           Int      @default(0)   // Invalidación JWT
+  require_password_change Boolean  @default(true)
+
+  // Soft delete
+  deleted_at              DateTime?
+
+  // Auditoría
+  created_at              DateTime @default(now())
+  updated_at              DateTime @updatedAt
+
+  // Relaciones
+  empresa                 Empresa  @relation(fields: [empresa_id], references: [id])
+
+  // Índices
+  @@index([empresa_id])
+  @@index([empresa_id, activo])
+  @@index([empresa_id, deleted_at])
+
+  @@map("admin_empresa")
+}
+
+// ============================================================================
+// 4. CATEGORIAS
+// Árbol de categorías con auto-referencia (padre_id → categorias).
+// version: optimistic locking para ediciones concurrentes.
+// ============================================================================
+model Categoria {
+  id          String     @id @default(uuid()) @db.Uuid
+  empresa_id  String     @db.Uuid
+  nombre      String
+  slug        String
+  descripcion String?
+  imagen_url  String?
+  padre_id    String?    @db.Uuid  // FK auto-referenciada para subcategorías
+  orden       Int        @default(0)
+  activa      Boolean    @default(true)
+  version     Int        @default(0)  // Optimistic locking
+
+  // Soft delete
+  deleted_at  DateTime?
+
+  // Auditoría
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+
+  // Relaciones
+  empresa       Empresa    @relation(fields: [empresa_id], references: [id])
+  padre         Categoria? @relation("SubCategorias", fields: [padre_id], references: [id])
+  subcategorias Categoria[] @relation("SubCategorias")
+  productos     Producto[]
+
+  // Índices
+  @@index([empresa_id])
+  @@index([empresa_id, activa])
+  @@index([empresa_id, orden])
+  @@index([empresa_id, deleted_at])
+
+  @@map("categorias")
+}
+
+// ============================================================================
+// 5. PRODUCTOS
+// Catálogo de productos por empresa.
+// version: optimistic locking — UPDATE SET version=version+1 WHERE id=? AND version=?
+// ÍNDICE PARCIAL case-insensitive: ver nota al inicio del archivo (RN-032).
+// ============================================================================
+model Producto {
+  id                 String    @id @default(uuid()) @db.Uuid
+  empresa_id         String    @db.Uuid
+  categoria_id       String?   @db.Uuid
+  nombre             String
+  slug               String
+  descripcion        String?
+  precio_base        Decimal   @db.Decimal(10, 2)
+  precio_comparacion Decimal?  @db.Decimal(10, 2)  // Precio tachado para mostrar descuento
+  activo             Boolean   @default(true)
+  destacado          Boolean   @default(false)
+  atributos          Json?     // Atributos dinámicos: { color?, talla?, material?, etc. }
+  version            Int       @default(0)  // Optimistic locking
+
+  // Soft delete
+  deleted_at         DateTime?
+
+  // Auditoría
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  // Relaciones
+  empresa    Empresa    @relation(fields: [empresa_id], references: [id])
+  categoria  Categoria? @relation(fields: [categoria_id], references: [id])
+  variantes  Variante[]
+  imagenes   ImagenProducto[]
+
+  // Índices
+  @@index([empresa_id])
+  @@index([empresa_id, activo])
+  @@index([empresa_id, destacado])
+  @@index([empresa_id, categoria_id])
+  @@index([empresa_id, deleted_at])
+
+  @@map("productos")
+}
+
+// ============================================================================
+// 6. VARIANTES
+// Variantes de productos (talla, color, etc.).
+// PESSIMISTIC LOCKING en stock:
+//   Al decrementar durante checkout → SELECT ... FOR UPDATE en la transacción.
+//   Previene sobreventa en peticiones concurrentes al mismo SKU.
+// sku: único por empresa (RN-035).
+// ============================================================================
+model Variante {
+  id          String   @id @default(uuid()) @db.Uuid
+  producto_id String   @db.Uuid
+  empresa_id  String   @db.Uuid
+  sku         String
+  nombre      String
+  precio      Decimal  @db.Decimal(10, 2)
+  stock       Int      @default(0)  // PESSIMISTIC LOCKING: SELECT FOR UPDATE al decrementar
+  atributos   Json?
+  activa      Boolean  @default(true)
+
+  // Soft delete
+  deleted_at  DateTime?
+
+  // Auditoría
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  // Relaciones
+  producto      Producto    @relation(fields: [producto_id], references: [id])
+  empresa       Empresa     @relation(fields: [empresa_id], references: [id])
+  carrito_items CarritoItem[]
+  pedido_items  PedidoItem[]
+
+  // Unicidad: SKU único por empresa
+  @@unique([empresa_id, sku])
+
+  // Índices
+  @@index([empresa_id])
+  @@index([producto_id])
+  @@index([empresa_id, activa])
+  @@index([empresa_id, deleted_at])
+
+  @@map("variantes")
+}
+
+// ============================================================================
+// 7. IMAGENES_PRODUCTO
+// Galería de imágenes por producto.
+// url: path local (./uploads/{empresa_id}/{uuid}.{ext}) o URL externa.
+// ============================================================================
+model ImagenProducto {
+  id           String   @id @default(uuid()) @db.Uuid
+  producto_id  String   @db.Uuid
+  empresa_id   String   @db.Uuid
+  url          String
+  orden        Int      @default(0)
+  es_principal Boolean  @default(false)
+
+  // Soft delete
+  deleted_at   DateTime?
+
+  // Auditoría
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  // Relaciones
+  producto     Producto @relation(fields: [producto_id], references: [id])
+  empresa      Empresa  @relation(fields: [empresa_id], references: [id])
+
+  // Índices
+  @@index([empresa_id])
+  @@index([producto_id])
+  @@index([producto_id, orden])
+  @@index([empresa_id, deleted_at])
+
+  @@map("imagenes_producto")
+}
+
+// ============================================================================
+// 8. CARRITO
+// Carrito de compras por usuario (cliente externo) y empresa.
+// usuario_id: ID externo del cliente proveniente de la plataforma central.
+// Nota: Prisma no soporta partial unique indexes nativos.
+//   Unicidad de carrito activo por usuario → validada en la capa de aplicación.
+// ============================================================================
+model Carrito {
+  id         String      @id @default(uuid()) @db.Uuid
+  empresa_id String      @db.Uuid
+  usuario_id String      // ID externo del cliente (plataforma central)
+  estado     String      @default("activo")  // activo | abandonado | completado
+  version    Int         @default(0)
+
+  // Soft delete
+  deleted_at DateTime?
+
+  // Auditoría
+  created_at DateTime    @default(now())
+  updated_at DateTime    @updatedAt
+
+  // Relaciones
+  empresa    Empresa     @relation(fields: [empresa_id], references: [id])
+  items      CarritoItem[]
+
+  // Índices
+  @@index([empresa_id])
+  @@index([empresa_id, usuario_id])
+  @@index([empresa_id, estado])
+  @@index([empresa_id, deleted_at])
+
+  @@map("carrito")
+}
+
+// ============================================================================
+// 9. CARRITO_ITEMS
+// Ítems del carrito.
+// precio_unitario: snapshot capturado al momento de agregar el ítem.
+// @@unique([carrito_id, variante_id]): evita duplicar la misma variante.
+// ============================================================================
+model CarritoItem {
+  id              String   @id @default(uuid()) @db.Uuid
+  carrito_id      String   @db.Uuid
+  variante_id     String   @db.Uuid
+  empresa_id      String   @db.Uuid
+  cantidad        Int      @default(1)
+  precio_unitario Decimal  @db.Decimal(10, 2)  // Snapshot de precio al agregar
+
+  // Soft delete
+  deleted_at      DateTime?
+
+  // Auditoría
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  // Relaciones
+  carrito         Carrito  @relation(fields: [carrito_id], references: [id])
+  variante        Variante @relation(fields: [variante_id], references: [id])
+  empresa         Empresa  @relation(fields: [empresa_id], references: [id])
+
+  // Unicidad: una variante por carrito
+  @@unique([carrito_id, variante_id])
+
+  // Índices
+  @@index([empresa_id])
+  @@index([carrito_id])
+  @@index([empresa_id, deleted_at])
+
+  @@map("carrito_items")
+}
+
+// ============================================================================
+// 10. PEDIDOS
+// Órdenes de compra generadas desde el checkout.
+// numero_pedido: legible por el admin, único por empresa (ej: ORD-00001).
+// idempotency_key: previene pedidos duplicados en reintentos de checkout.
+// version: optimistic locking para actualizaciones de estado concurrentes.
+// ============================================================================
+model Pedido {
+  id               String   @id @default(uuid()) @db.Uuid
+  empresa_id       String   @db.Uuid
+  numero_pedido    String   // Ej: ORD-00001 — único por empresa (ver @@unique abajo)
+
+  // Datos del cliente (sin FK — cliente externo a la plataforma)
+  cliente_nombre   String
+  cliente_email    String?
+  cliente_telefono String?
+
+  estado           String   @default("pendiente")  // pendiente | confirmado | enviado | entregado | cancelado
+  subtotal         Decimal  @db.Decimal(10, 2)
+  descuento        Decimal  @db.Decimal(10, 2) @default(0)
+  total            Decimal  @db.Decimal(10, 2)
+  cupon_id         String?  @db.Uuid
+  datos_envio      Json?
+  notas            String?
+  idempotency_key  String?  @unique  // Previene duplicados en checkout (RN-idempotency)
+  version          Int      @default(0)  // Optimistic locking
+
+  // Soft delete
+  deleted_at       DateTime?
+
+  // Auditoría
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  // Relaciones
+  empresa          Empresa    @relation(fields: [empresa_id], references: [id])
+  cupon            Cupon?     @relation(fields: [cupon_id], references: [id])
+  items            PedidoItem[]
+
+  // Unicidad: número de pedido único por empresa
+  @@unique([empresa_id, numero_pedido])
+
+  // Índices
+  @@index([empresa_id])
+  @@index([empresa_id, estado])
+  @@index([empresa_id, deleted_at])
+  @@index([empresa_id, created_at])
+
+  @@map("pedidos")
+}
+
+// ============================================================================
+// 11. PEDIDO_ITEMS
+// Ítems de cada pedido.
+// snapshot_variante: JSON con estado de la variante al momento del pedido
+//   (nombre, sku, atributos, precio). Garantiza integridad histórica.
+// ============================================================================
+model PedidoItem {
+  id                String   @id @default(uuid()) @db.Uuid
+  pedido_id         String   @db.Uuid
+  variante_id       String   @db.Uuid
+  empresa_id        String   @db.Uuid
+  cantidad          Int
+  precio_unitario   Decimal  @db.Decimal(10, 2)
+  subtotal          Decimal  @db.Decimal(10, 2)
+  snapshot_variante Json     // { nombre, sku, atributos, precio } al momento del pedido
+
+  // Soft delete
+  deleted_at        DateTime?
+
+  // Auditoría
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  // Relaciones
+  pedido            Pedido   @relation(fields: [pedido_id], references: [id])
+  variante          Variante @relation(fields: [variante_id], references: [id])
+  empresa           Empresa  @relation(fields: [empresa_id], references: [id])
+
+  // Índices
+  @@index([empresa_id])
+  @@index([pedido_id])
+  @@index([empresa_id, deleted_at])
+
+  @@map("pedido_items")
+}
+
+// ============================================================================
+// 12. CONFIGURACION_EMPRESA
+// Configuración 1:1 por empresa.
+// Sin soft delete: es inseparable del tenant (se elimina al eliminar la empresa).
+// version: optimistic locking para ediciones concurrentes de configuración.
+// ============================================================================
+model ConfiguracionEmpresa {
+  id            String   @id @default(uuid()) @db.Uuid
+  empresa_id    String   @unique @db.Uuid  // 1:1 con empresas
+  moneda        String   @default("MXN")
+  idioma        String   @default("es")
+  tema          Json?    // Paleta de colores, fuentes, logo_url
+  metodos_pago  Json?    // Configuración de WhatsApp, Mercado Pago, etc.
+  datos_tienda  Json?    // Dirección, horarios, descripción
+  version       Int      @default(0)  // Optimistic locking
+
+  // Auditoría (sin soft delete: inseparable del tenant)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  // Relaciones
+  empresa       Empresa  @relation(fields: [empresa_id], references: [id])
+
+  @@map("configuracion_empresa")
+}
+
+// ============================================================================
+// 13. CUPONES
+// Cupones de descuento por empresa.
+// PESSIMISTIC LOCKING en usos_actuales:
+//   Al validar y aplicar cupón → SELECT ... FOR UPDATE en la transacción.
+//   Previene condiciones de carrera en el conteo de usos concurrentes.
+// @@unique([empresa_id, codigo]): código único por empresa (case-sensitive).
+// ============================================================================
+model Cupon {
+  id            String   @id @default(uuid()) @db.Uuid
+  empresa_id    String   @db.Uuid
+  codigo        String
+  tipo          String   // porcentaje | monto_fijo
+  valor         Decimal  @db.Decimal(10, 2)
+  usos_actuales Int      @default(0)  // PESSIMISTIC LOCKING: SELECT FOR UPDATE al aplicar
+  usos_maximos  Int?
+  monto_minimo  Decimal? @db.Decimal(10, 2)
+  valido_desde  DateTime
+  valido_hasta  DateTime?
+  activo        Boolean  @default(true)
+
+  // Soft delete
+  deleted_at    DateTime?
+
+  // Auditoría
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  // Relaciones
+  empresa       Empresa  @relation(fields: [empresa_id], references: [id])
+  pedidos       Pedido[]
+
+  // Unicidad: código único por empresa
+  @@unique([empresa_id, codigo])
+
+  // Índices
+  @@index([empresa_id])
+  @@index([empresa_id, activo])
+  @@index([empresa_id, deleted_at])
+
+  @@map("cupones")
+}

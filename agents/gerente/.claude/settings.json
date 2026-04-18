@@ -5,12 +5,13 @@
   },
   "defaultMode": "bypassPermissions",
   "hooks": {
-    "Stop": [
+    "PreToolUse": [
       {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "bash ../../.claude/hooks/check-completion.sh"
+            "command": "bash .claude/hooks/pre-tool-use.sh"
           }
         ]
       }

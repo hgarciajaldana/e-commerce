@@ -1,0 +1,425 @@
+{
+  "proyecto": "ecomerce-multi-tenant",
+  "version": "1.0",
+  "fecha": "2026-02-24",
+  "epicas": [
+    {
+      "id": "EP-01",
+      "titulo": "Portal Público de Tienda",
+      "descripcion": "Experiencia del cliente final navegando la tienda de una empresa en su subdominio",
+      "historias": ["US-001", "US-002", "US-003", "US-004", "US-005"]
+    },
+    {
+      "id": "EP-02",
+      "titulo": "Gestión de Catálogo (Admin Empresa)",
+      "descripcion": "Herramientas para que el admin de empresa gestione sus productos",
+      "historias": ["US-006", "US-007", "US-008", "US-009"]
+    },
+    {
+      "id": "EP-03",
+      "titulo": "Configuración de Empresa (Admin Empresa)",
+      "descripcion": "Configuración de datos de contacto, WhatsApp y redes sociales de la empresa",
+      "historias": ["US-010", "US-011"]
+    },
+    {
+      "id": "EP-04",
+      "titulo": "Gestión de Usuarios Admin (Admin Empresa)",
+      "descripcion": "Control de acceso y usuarios administradores dentro de una empresa",
+      "historias": ["US-012", "US-013"]
+    },
+    {
+      "id": "EP-05",
+      "titulo": "Super Admin - Gestión de Plataforma",
+      "descripcion": "Panel para gestionar empresas, subdominios y configuración global de la plataforma",
+      "historias": ["US-014", "US-015", "US-016"]
+    }
+  ],
+  "historias": [
+    {
+      "id": "US-001",
+      "epica": "EP-01",
+      "titulo": "Ver catálogo de productos",
+      "como": "cliente",
+      "quiero": "ver el catálogo de productos activos de la tienda",
+      "para": "encontrar y evaluar lo que quiero comprar",
+      "criterios_aceptacion": [
+        "Solo se muestran los productos con estado activo",
+        "Cada producto muestra: nombre, precio, imagen (o placeholder si no tiene) y descripción breve",
+        "El catálogo es responsive: funciona en móvil y desktop",
+        "Si no hay productos activos, se muestra un mensaje indicativo al cliente",
+        "El catálogo corresponde únicamente a la empresa del subdominio accedido"
+      ],
+      "prioridad": "Alta",
+      "moscow": "Must",
+      "estado": "Pendiente"
+    },
+    {
+      "id": "US-002",
+      "epica": "EP-01",
+      "titulo": "Ver detalle de producto",
+      "como": "cliente",
+      "quiero": "ver el detalle completo de un producto",
+      "para": "tomar una decisión de compra informada",
+      "criterios_aceptacion": [
+        "Se muestra nombre completo, precio, descripción completa e imagen del producto",
+        "Hay un botón visible para agregar al carrito con selector de cantidad",
+        "Si el producto no existe o está inactivo, se muestra página 404 o redirección al catálogo",
+        "El acceso directo por URL a un producto inactivo no lo expone"
+      ],
+      "prioridad": "Alta",
+      "moscow": "Must",
+      "estado": "Pendiente"
+    },
+    {
+      "id": "US-003",
+      "epica": "EP-01",
+      "titulo": "Agregar producto al carrito",
+      "como": "cliente",
+      "quiero": "agregar productos al carrito indicando cantidad",
+      "para": "acumular mi pedido antes de enviarlo",
+      "criterios_aceptacion": [
+        "El cliente puede especificar la cantidad al agregar un producto (mínimo 1)",
+        "El carrito persiste durante la sesión de navegación (no requiere cuenta)",
+        "Se muestra un indicador visible del número de ítems en el carrito",
+        "Si el mismo producto se agrega nuevamente, se incrementa su cantidad en el carrito",
+        "El carrito es por tienda (subdominio): no comparte estado con otras tiendas"
+      ],
+      "prioridad": "Alta",
+      "moscow": "Must",
+      "estado": "Pendiente"
+    },
+    {
+      "id": "US-004",
+      "epica": "EP-01",
+      "titulo": "Ver y gestionar carrito",
+      "como": "cliente",
+      "quiero": "ver y modificar el contenido de mi carrito",
+      "para": "revisar y ajustar mi pedido antes de enviarlo",
+      "criterios_aceptacion": [
+        "Se listan todos los productos agregados con: nombre, precio unitario, cantidad y subtotal por ítem",
+        "El cliente puede cambiar la cantidad de cada ítem directamente en el carrito",
+        "El cliente puede eliminar un ítem del carrito",
+        "Se muestra el total calculado del pedido",
+        "Existe la opción de vaciar el carrito completo",
+        "El carrito muestra un mensaje si está vacío con acceso al catálogo"
+      ],
+      "prioridad": "Alta",
+      "moscow": "Must",
+      "estado": "Pendiente"
+    },
+    {
+      "id": "US-005",
+      "epica": "EP-01",
+      "titulo": "Finalizar compra vía WhatsApp",
+      "como": "cliente",
+      "quiero": "ser redirigido a WhatsApp con mi pedido al hacer clic en 'Finalizar pedido'",
+      "para": "confirmar mi compra directamente con la empresa",
+      "criterios_aceptacion": [
+        "El botón 'Finalizar pedido' es visible en la vista del carrito",
+        "Al hacer clic, se abre WhatsApp (web o app nativa) con el número configurado por la empresa",
+        "El mensaje pre-redactado incluye: listado de productos (nombre, cantidad, precio unitario) y total del pedido",
+        "Si la empresa no tiene número de WhatsApp configurado, el botón está deshabilitado con mensaje explicativo",
+        "La redirección funciona correctamente tanto en móvil como en desktop",
+        "El carrito no se vacía automáticamente al hacer clic (el cliente puede regresar si lo necesita)"
+      ],
+      "prioridad": "Alta",
+      "moscow": "Must",
+      "estado": "Pendiente"
+    },
+    {
+      "id": "US-006",
+      "epica": "EP-02",
+      "titulo": "Crear producto",
+      "como": "administrador de empresa",
+      "quiero": "crear nuevos productos en mi catálogo",
+      "para": "ofrecer mi inventario a los clientes en el portal público",
+      "criterios_aceptacion": [
+        "Campos requeridos: nombre (texto), precio (numérico positivo), descripción (texto)",
+        "Campo de imagen: opcional. Acepta subir archivo desde computadora O pegar URL externa",
+        "El producto se crea con estado 'activo' por defecto",
+        "El precio solo acepta valores numéricos positivos; se valida antes de guardar",
+        "Se muestra mensaje de éxito al crear correctamente",
+        "Un admin solo puede crear productos para su propia empresa"
+      ],
+      "prioridad": "Alta",
+      "moscow": "Must",
+      "estado": "Pendiente"
+    },
+    {
+      "id": "US-007",
+      "epica": "EP-02",
+      "titulo": "Editar producto",
+      "como": "administrador de empresa",
+      "quiero": "editar los datos de un producto existente",
+      "para": "mantener el catálogo actualizado",
+      "criterios_aceptacion": [
+        "Se pueden modificar todos los campos: nombre, precio, descripción, imagen",
+        "Los cambios se reflejan inmediatamente en el portal público tras guardar",
+        "Se muestra mensaje de éxito al guardar correctamente",
+        "Solo el administrador de la propia empresa puede editar sus productos",
+        "Al editar la imagen se puede reemplazar por nuevo archivo o nueva URL"
+      ],
+      "prioridad": "Alta",
+      "moscow": "Must",
+      "estado": "Pendiente"
+    },
+    {
+      "id": "US-008",
+      "epica": "EP-02",
+      "titulo": "Activar y desactivar producto",
+      "como": "administrador de empresa",
+      "quiero": "activar o desactivar productos de mi catálogo",
+      "para": "controlar qué productos son visibles en el portal público sin eliminarlos",
+      "criterios_aceptacion": [
+        "Los productos desactivados no aparecen en el portal público para los clientes",
+        "El admin puede ver todos sus productos (activos e inactivos) en el panel con indicador de estado",
+        "El cambio de estado es inmediato: al guardar se refleja en el portal público",
+        "El admin puede reactivar un producto desactivado en cualquier momento"
+      ],
+      "prioridad": "Alta",
+      "moscow": "Must",
+      "estado": "Pendiente"
+    },
+    {
+      "id": "US-009",
+      "epica": "EP-02",
+      "titulo": "Gestionar imagen de producto",
+      "como": "administrador de empresa",
+      "quiero": "subir una imagen desde mi computadora o pegar una URL externa para un producto",
+      "para": "que el catálogo tenga imágenes representativas de los productos",
+      "criterios_aceptacion": [
+        "El admin puede subir un archivo de imagen desde su computadora (formatos aceptados: JPG, PNG, WEBP; tamaño máximo: 5 MB)",
+        "El admin puede pegar una URL de imagen externa como alternativa",
+        "Solo una opción se usa por producto: la última guardada reemplaza la anterior",
+        "La imagen se muestra en el panel admin y en el portal público",
+        "Si un producto no tiene imagen, se muestra un placeholder estándar en el portal",
+        "Al subir archivo inválido (tamaño o formato), se muestra mensaje de error descriptivo"
+      ],
+      "prioridad": "Alta",
+      "moscow": "Must",
+      "estado": "Pendiente"
+    },
+    {
+      "id": "US-010",
+      "epica": "EP-03",
+      "titulo": "Configurar número de WhatsApp de la empresa",
+      "como": "administrador de empresa",
+      "quiero": "configurar el número de WhatsApp de mi empresa",
+      "para": "que los clientes me envíen sus pedidos a través del checkout",
+      "criterios_aceptacion": [
+        "El admin ingresa el número de WhatsApp incluyendo código de país (ej: +52 55 1234 5678)",
+        "El sistema valida que el formato del número sea correcto antes de guardar",
+        "El número configurado se usa en la redirección de checkout del portal público",
+        "Se muestra mensaje de confirmación al guardar correctamente",
+        "El número puede actualizarse en cualquier momento"
+      ],
+      "prioridad": "Alta",
+      "moscow": "Must",
+      "estado": "Pendiente"
+    },
+    {
+      "id": "US-011",
+      "epica": "EP-03",
+      "titulo": "Configurar datos de contacto y redes sociales",
+      "como": "administrador de empresa",
+      "quiero": "configurar mis redes sociales y datos de contacto adicionales",
+      "para": "que los clientes puedan encontrar más información sobre mi empresa",
+      "criterios_aceptacion": [
+        "Campos disponibles (todos opcionales): URL de Instagram, URL de Facebook, URL de Twitter/X, teléfono de contacto, correo electrónico",
+        "Las URLs de redes sociales se validan como URLs válidas antes de guardar",
+        "El correo electrónico se valida con formato estándar",
+        "El teléfono acepta formato con código de país",
+        "Los datos guardados son visibles en el portal público de la empresa",
+        "Dejar un campo vacío es válido y simplemente no lo muestra en el portal"
+      ],
+      "prioridad": "Media",
+      "moscow": "Should",
+      "estado": "Pendiente"
+    },
+    {
+      "id": "US-012",
+      "epica": "EP-04",
+      "titulo": "Gestionar usuarios administradores de empresa",
+      "como": "administrador de empresa",
+      "quiero": "crear y gestionar otros usuarios administradores para mi empresa",
+      "para": "controlar quién puede administrar la tienda",
+      "criterios_aceptacion": [
+        "El admin puede crear nuevos usuarios admin para su empresa (campos: nombre, correo, contraseña temporal)",
+        "El admin puede desactivar usuarios administradores existentes",
+        "Un usuario admin desactivado no puede iniciar sesión en el panel",
+        "Un admin solo puede gestionar usuarios de su propia empresa",
+        "No es posible desactivar al único usuario admin activo de la empresa",
+        "Se muestra listado de usuarios con nombre, correo y estado"
+      ],
+      "prioridad": "Media",
+      "moscow": "Should",
+      "estado": "Pendiente"
+    },
+    {
+      "id": "US-013",
+      "epica": "EP-04",
+      "titulo": "Autenticarse en el panel administrativo",
+      "como": "administrador de empresa",
+      "quiero": "iniciar sesión en el panel administrativo con mis credenciales",
+      "para": "gestionar mi tienda de forma segura",
+      "criterios_aceptacion": [
+        "Inicio de sesión mediante correo electrónico y contraseña",
+        "La sesión expira después de un tiempo de inactividad configurable",
+        "Se muestran mensajes de error claros ante credenciales inválidas (sin revelar cuál campo es incorrecto)",
+        "Tras login exitoso, el admin es redirigido al dashboard de su empresa",
+        "Existe opción de cerrar sesión de forma explícita",
+        "El panel admin solo es accesible a usuarios autenticados; sin autenticación redirige al login"
+      ],
+      "prioridad": "Alta",
+      "moscow": "Must",
+      "estado": "Pendiente"
+    },
+    {
+      "id": "US-014",
+      "epica": "EP-05",
+      "titulo": "Crear empresa en la plataforma",
+      "como": "super administrador",
+      "quiero": "crear nuevas empresas en la plataforma",
+      "para": "incorporar nuevos clientes y asignarles su espacio en la plataforma",
+      "criterios_aceptacion": [
+        "Campos requeridos: nombre de la empresa, subdominio deseado, nombre del admin inicial, correo del admin inicial",
+        "El subdominio se valida: solo letras minúsculas, números y guiones; debe ser único en la plataforma",
+        "Se crea automáticamente un usuario administrador para la empresa con contraseña temporal",
+        "El subdominio queda activo inmediatamente al crear la empresa",
+        "Se muestra confirmación con el subdominio asignado y credenciales del admin inicial",
+        "No se puede crear una empresa con un subdominio ya existente"
+      ],
+      "prioridad": "Alta",
+      "moscow": "Must",
+      "estado": "Pendiente"
+    },
+    {
+      "id": "US-015",
+      "epica": "EP-05",
+      "titulo": "Gestionar empresas en la plataforma",
+      "como": "super administrador",
+      "quiero": "listar, ver el detalle y gestionar las empresas registradas",
+      "para": "administrar correctamente la plataforma y sus clientes",
+      "criterios_aceptacion": [
+        "El super admin puede listar todas las empresas con: nombre, subdominio, estado (activa/inactiva) y fecha de creación",
+        "Puede activar o desactivar una empresa; si está desactivada, el portal público muestra página de mantenimiento o error 503",
+        "Puede editar el nombre de la empresa",
+        "Puede ver el subdominio asignado (el cambio de subdominio se gestiona como operación especial con confirmación explícita)",
+        "Puede buscar/filtrar empresas por nombre o subdominio"
+      ],
+      "prioridad": "Alta",
+      "moscow": "Must",
+      "estado": "Pendiente"
+    },
+    {
+      "id": "US-016",
+      "epica": "EP-05",
+      "titulo": "Autenticarse como super administrador",
+      "como": "super administrador",
+      "quiero": "iniciar sesión en el panel de super admin",
+      "para": "gestionar la plataforma de forma segura y separada del panel de empresas",
+      "criterios_aceptacion": [
+        "El acceso al panel de super admin está en una URL/subdominio diferente al panel de empresa",
+        "Inicio de sesión mediante correo y contraseña",
+        "Un super admin no puede acceder al panel de empresa y viceversa (roles estrictamente separados)",
+        "La sesión expira después de un tiempo de inactividad",
+        "Se muestra mensaje de error claro ante credenciales inválidas"
+      ],
+      "prioridad": "Alta",
+      "moscow": "Must",
+      "estado": "Pendiente"
+    }
+  ],
+  "requisitos_no_funcionales": [
+    {
+      "id": "RNF-001",
+      "categoria": "Seguridad / Multi-tenancy",
+      "descripcion": "Aislamiento total de datos entre empresas: un administrador de empresa A no puede ver, crear, editar ni eliminar datos de empresa B bajo ninguna circunstancia",
+      "moscow": "Must"
+    },
+    {
+      "id": "RNF-002",
+      "categoria": "Responsividad",
+      "descripcion": "El portal público y el panel administrativo son completamente funcionales en dispositivos móviles (mínimo 375px) y desktop",
+      "moscow": "Must"
+    },
+    {
+      "id": "RNF-003",
+      "categoria": "Rendimiento",
+      "descripcion": "El catálogo de productos carga en menos de 2 segundos en condiciones normales de red",
+      "moscow": "Should"
+    },
+    {
+      "id": "RNF-004",
+      "categoria": "Seguridad - Autenticación",
+      "descripcion": "HTTPS obligatorio en todos los subdominios. Autenticación con roles diferenciados: cliente anónimo, admin de empresa, super admin",
+      "moscow": "Must"
+    },
+    {
+      "id": "RNF-005",
+      "categoria": "SEO",
+      "descripcion": "El portal público de cada empresa tiene title y meta description dinámicos basados en el nombre de la empresa y su catálogo",
+      "moscow": "Should"
+    },
+    {
+      "id": "RNF-006",
+      "categoria": "Escalabilidad",
+      "descripcion": "El sistema soporta al menos 50 empresas activas simultáneas sin degradación perceptible de rendimiento",
+      "moscow": "Should"
+    },
+    {
+      "id": "RNF-007",
+      "categoria": "Disponibilidad",
+      "descripcion": "Uptime objetivo del 99.5% mensual para los portales públicos",
+      "moscow": "Should"
+    },
+    {
+      "id": "RNF-008",
+      "categoria": "Almacenamiento de imágenes",
+      "descripcion": "Las imágenes subidas por los admins deben almacenarse de forma persistente y accesible públicamente desde el portal. Tamaño máximo por archivo: 5 MB",
+      "moscow": "Must"
+    }
+  ],
+  "backlog_futuro": [
+    {
+      "id": "FUT-001",
+      "titulo": "Búsqueda y filtrado de productos en el catálogo",
+      "motivo_diferimiento": "No esencial para el MVP; el catálogo inicial de empresas pequeñas es manejable sin búsqueda"
+    },
+    {
+      "id": "FUT-002",
+      "titulo": "Pasarela de pagos integrada",
+      "motivo_diferimiento": "Decisión explícita DEC-002: el checkout vía WhatsApp cubre el objetivo del MVP"
+    },
+    {
+      "id": "FUT-003",
+      "titulo": "Notificaciones por email al cliente",
+      "motivo_diferimiento": "WhatsApp ya actúa como canal de confirmación; email agrega complejidad sin valor MVP"
+    },
+    {
+      "id": "FUT-004",
+      "titulo": "Sistema de reviews y valoraciones de productos",
+      "motivo_diferimiento": "Funcionalidad avanzada; no necesaria para el funcionamiento básico del e-commerce"
+    },
+    {
+      "id": "FUT-005",
+      "titulo": "Multi-idioma",
+      "motivo_diferimiento": "Fuera del alcance inicial; requiere infraestructura adicional de i18n"
+    },
+    {
+      "id": "FUT-006",
+      "titulo": "Dashboard de analytics y reportes",
+      "motivo_diferimiento": "Los pedidos se gestionan fuera de la plataforma (WhatsApp); no hay datos suficientes para analytics en MVP"
+    },
+    {
+      "id": "FUT-007",
+      "titulo": "Categorías y subcategorías de productos",
+      "motivo_diferimiento": "Útil para catálogos grandes; diferido hasta validar necesidad real de las empresas"
+    },
+    {
+      "id": "FUT-008",
+      "titulo": "Página 'Sobre nosotros' por empresa",
+      "motivo_diferimiento": "Nice-to-have; no impacta el flujo principal de compra"
+    }
+  ]
+}

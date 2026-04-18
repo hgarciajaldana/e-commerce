@@ -1,0 +1,393 @@
+{
+  "proyecto": "ecomerce-multi-tenant",
+  "version": "1.0",
+  "fecha": "2026-02-24",
+  "descripcion": "Reglas de negocio por módulo. Estas reglas son invariantes funcionales que el sistema debe respetar en toda circunstancia.",
+  "modulos": {
+    "EP-01_portal_publico": {
+      "nombre": "Portal Público de Tienda",
+      "reglas": [
+        {
+          "id": "RN-001",
+          "titulo": "Solo productos activos en portal",
+          "descripcion": "El portal público solo muestra productos cuyo estado sea 'activo'. Los productos inactivos no aparecen en el catálogo ni son accesibles por URL directa.",
+          "historias_afectadas": ["US-001", "US-002"],
+          "tipo": "visibilidad",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-002",
+          "titulo": "Aislamiento por subdominio",
+          "descripcion": "El catálogo mostrado en un subdominio corresponde única y exclusivamente a la empresa propietaria de ese subdominio. No puede filtrarse ni visualizarse contenido de otras empresas.",
+          "historias_afectadas": ["US-001", "US-002", "US-003", "US-004", "US-005"],
+          "tipo": "multi-tenancy",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-003",
+          "titulo": "Carrito por sesión de navegación",
+          "descripcion": "El carrito es temporal y persiste durante la sesión de navegación del cliente. No requiere cuenta ni autenticación. Al cerrar el navegador/pestaña, el carrito puede perderse (comportamiento de sesión).",
+          "historias_afectadas": ["US-003", "US-004"],
+          "tipo": "estado",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-004",
+          "titulo": "Carrito aislado por tienda",
+          "descripcion": "El carrito de una tienda (subdominio) no comparte estado con el carrito de otra tienda. Si un cliente visita dos tiendas distintas, cada una tiene su propio carrito independiente.",
+          "historias_afectadas": ["US-003", "US-004"],
+          "tipo": "multi-tenancy",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-005",
+          "titulo": "Acumulación de cantidad en carrito",
+          "descripcion": "Si el cliente agrega al carrito un producto que ya está en él, se incrementa la cantidad del ítem existente en lugar de crear un ítem duplicado.",
+          "historias_afectadas": ["US-003"],
+          "tipo": "comportamiento-carrito",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-006",
+          "titulo": "Cantidad mínima de ítem es 1",
+          "descripcion": "La cantidad de cualquier ítem en el carrito no puede ser menor a 1. Si el cliente intenta reducir la cantidad a 0, se elimina el ítem del carrito o se muestra error de validación.",
+          "historias_afectadas": ["US-003", "US-004"],
+          "tipo": "validación",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-007",
+          "titulo": "Carrito no se vacía al iniciar checkout",
+          "descripcion": "Al hacer clic en 'Finalizar pedido' y ser redirigido a WhatsApp, el carrito no se vacía automáticamente. El cliente puede regresar al carrito si lo necesita.",
+          "historias_afectadas": ["US-005"],
+          "tipo": "comportamiento-checkout",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-008",
+          "titulo": "Checkout requiere WhatsApp configurado",
+          "descripcion": "Si la empresa no tiene número de WhatsApp configurado, el botón 'Finalizar pedido' está deshabilitado y muestra un mensaje explicativo al cliente. No se puede completar el checkout.",
+          "historias_afectadas": ["US-005"],
+          "tipo": "dependencia-configuración",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-009",
+          "titulo": "Empresa inactiva muestra error 503",
+          "descripcion": "Si una empresa es desactivada por el super admin, su portal público muestra una página de mantenimiento o error 503. No se muestra el catálogo ni ningún dato de la empresa.",
+          "historias_afectadas": ["US-001", "US-015"],
+          "tipo": "visibilidad",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-010",
+          "titulo": "Subdominio inexistente muestra 404",
+          "descripcion": "Si se accede a un subdominio que no corresponde a ninguna empresa registrada en la plataforma, se muestra una página de error 404.",
+          "historias_afectadas": ["US-001"],
+          "tipo": "routing",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-011",
+          "titulo": "Mensaje de WhatsApp incluye resumen completo",
+          "descripcion": "El mensaje pre-redactado para WhatsApp debe incluir: nombre de cada producto, cantidad solicitada, precio unitario de cada producto y el total del pedido. El mensaje debe ser legible y organizado.",
+          "historias_afectadas": ["US-005"],
+          "tipo": "formato-mensaje",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-012",
+          "titulo": "Checkout deshabilitado con carrito vacío",
+          "descripcion": "El botón 'Finalizar pedido' debe estar deshabilitado o no visible si el carrito está vacío.",
+          "historias_afectadas": ["US-004", "US-005"],
+          "tipo": "validación",
+          "prioridad": "Must"
+        }
+      ]
+    },
+    "EP-02_gestion_catalogo": {
+      "nombre": "Gestión de Catálogo (Admin Empresa)",
+      "reglas": [
+        {
+          "id": "RN-013",
+          "titulo": "Admin gestiona solo su empresa",
+          "descripcion": "Un administrador de empresa solo puede crear, editar, activar, desactivar y gestionar los productos de su propia empresa. No puede ver ni modificar productos de otras empresas.",
+          "historias_afectadas": ["US-006", "US-007", "US-008", "US-009"],
+          "tipo": "multi-tenancy",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-014",
+          "titulo": "Precio solo positivo",
+          "descripcion": "El precio de un producto debe ser un valor numérico estrictamente mayor que cero. No se aceptan precios en 0, negativos ni valores no numéricos.",
+          "historias_afectadas": ["US-006", "US-007"],
+          "tipo": "validación",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-015",
+          "titulo": "Nombre y descripción obligatorios",
+          "descripcion": "Al crear o editar un producto, el nombre y la descripción son campos obligatorios. No se puede guardar un producto sin ambos campos.",
+          "historias_afectadas": ["US-006", "US-007"],
+          "tipo": "validación",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-016",
+          "titulo": "Imagen opcional con placeholder",
+          "descripcion": "La imagen de un producto es opcional. Si un producto no tiene imagen asignada (ni archivo ni URL), se muestra un placeholder estándar tanto en el panel admin como en el portal público.",
+          "historias_afectadas": ["US-006", "US-007", "US-009"],
+          "tipo": "imagen",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-017",
+          "titulo": "Formatos y tamaño máximo de imagen",
+          "descripcion": "Las imágenes subidas por archivo deben ser de formato JPG, PNG o WEBP. El tamaño máximo por archivo es 5 MB. Archivos que incumplan estas condiciones son rechazados con mensaje de error descriptivo.",
+          "historias_afectadas": ["US-009"],
+          "tipo": "validación-imagen",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-018",
+          "titulo": "Una sola fuente de imagen por producto",
+          "descripcion": "Un producto solo puede tener una imagen activa a la vez. La fuente puede ser archivo subido o URL externa, pero no ambas simultáneamente. La última guardada reemplaza a la anterior.",
+          "historias_afectadas": ["US-009"],
+          "tipo": "imagen",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-019",
+          "titulo": "Producto se crea activo por defecto",
+          "descripcion": "Al crear un nuevo producto, su estado inicial es 'activo', lo que significa que es visible inmediatamente en el portal público.",
+          "historias_afectadas": ["US-006"],
+          "tipo": "estado-inicial",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-020",
+          "titulo": "Cambio de estado inmediato en portal",
+          "descripcion": "Al activar o desactivar un producto, el cambio se refleja de forma inmediata en el portal público. No hay caché que retrase la visibilidad del cambio.",
+          "historias_afectadas": ["US-007", "US-008"],
+          "tipo": "consistencia",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-021",
+          "titulo": "Admin ve todos sus productos independiente del estado",
+          "descripcion": "El panel admin muestra todos los productos de la empresa (activos e inactivos) con un indicador visual del estado. El filtrado por estado es solo para el portal público.",
+          "historias_afectadas": ["US-008"],
+          "tipo": "visibilidad-admin",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-022",
+          "titulo": "URL de imagen externa debe ser URL válida",
+          "descripcion": "Si el admin opta por pegar una URL de imagen externa, el sistema valida que la cadena tenga formato de URL válida (protocolo http/https, dominio, etc.) antes de guardar.",
+          "historias_afectadas": ["US-009"],
+          "tipo": "validación-imagen",
+          "prioridad": "Must"
+        }
+      ]
+    },
+    "EP-03_configuracion_empresa": {
+      "nombre": "Configuración de Empresa (Admin Empresa)",
+      "reglas": [
+        {
+          "id": "RN-023",
+          "titulo": "Número de WhatsApp con código de país",
+          "descripcion": "El número de WhatsApp de la empresa debe incluir el código de país (ej: +52 55 1234 5678). El sistema valida el formato antes de guardar. Un número sin código de país es rechazado.",
+          "historias_afectadas": ["US-010"],
+          "tipo": "validación",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-024",
+          "titulo": "WhatsApp vacío deshabilita checkout",
+          "descripcion": "Si el administrador guarda el número de WhatsApp vacío (borra el número existente), el checkout del portal queda deshabilitado hasta que se configure un número válido.",
+          "historias_afectadas": ["US-010", "US-005"],
+          "tipo": "dependencia",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-025",
+          "titulo": "URLs de redes sociales deben ser válidas",
+          "descripcion": "Cuando el admin ingresa una URL de red social (Instagram, Facebook, Twitter/X), el sistema valida que tenga formato de URL válida antes de guardar. Una URL malformada se rechaza con error por campo.",
+          "historias_afectadas": ["US-011"],
+          "tipo": "validación",
+          "prioridad": "Should"
+        },
+        {
+          "id": "RN-026",
+          "titulo": "Correo de contacto con formato estándar",
+          "descripcion": "El campo de correo electrónico de contacto (si se ingresa) se valida con formato de email estándar (usuario@dominio.ext). Un correo malformado es rechazado.",
+          "historias_afectadas": ["US-011"],
+          "tipo": "validación",
+          "prioridad": "Should"
+        },
+        {
+          "id": "RN-027",
+          "titulo": "Campos de contacto son opcionales",
+          "descripcion": "Todos los campos de configuración de redes sociales y contacto adicional (Instagram, Facebook, Twitter/X, teléfono, correo) son opcionales. Dejar un campo vacío es válido y simplemente no muestra ese dato en el portal.",
+          "historias_afectadas": ["US-011"],
+          "tipo": "opcionalidad",
+          "prioridad": "Should"
+        },
+        {
+          "id": "RN-028",
+          "titulo": "Campos vacíos no se muestran en portal",
+          "descripcion": "Los campos de redes sociales y contacto que estén vacíos no se muestran en el portal público. No se muestran secciones vacías ni iconos sin enlace.",
+          "historias_afectadas": ["US-011"],
+          "tipo": "presentación",
+          "prioridad": "Should"
+        },
+        {
+          "id": "RN-029",
+          "titulo": "Admin solo configura su propia empresa",
+          "descripcion": "Un admin de empresa solo puede ver y modificar la configuración de su propia empresa. No puede acceder a la configuración de otras empresas.",
+          "historias_afectadas": ["US-010", "US-011"],
+          "tipo": "multi-tenancy",
+          "prioridad": "Must"
+        }
+      ]
+    },
+    "EP-04_usuarios_admin": {
+      "nombre": "Gestión de Usuarios Admin (Admin Empresa)",
+      "reglas": [
+        {
+          "id": "RN-030",
+          "titulo": "Admin gestiona solo usuarios de su empresa",
+          "descripcion": "Un administrador de empresa solo puede ver, crear y desactivar usuarios administradores de su propia empresa. No puede acceder ni modificar usuarios de otras empresas.",
+          "historias_afectadas": ["US-012"],
+          "tipo": "multi-tenancy",
+          "prioridad": "Should"
+        },
+        {
+          "id": "RN-031",
+          "titulo": "No se puede desactivar al único admin activo",
+          "descripcion": "Si una empresa tiene un único usuario administrador activo, no es posible desactivarlo. El sistema bloquea esta operación con un mensaje de error explicativo. Siempre debe haber al menos un admin activo por empresa.",
+          "historias_afectadas": ["US-012"],
+          "tipo": "protección",
+          "prioridad": "Should"
+        },
+        {
+          "id": "RN-032",
+          "titulo": "Usuario desactivado no puede iniciar sesión",
+          "descripcion": "Un usuario administrador cuyo estado sea 'inactivo' no puede autenticarse en el panel admin. El sistema rechaza sus credenciales con un mensaje indicando que la cuenta está desactivada.",
+          "historias_afectadas": ["US-012", "US-013"],
+          "tipo": "control-acceso",
+          "prioridad": "Should"
+        },
+        {
+          "id": "RN-033",
+          "titulo": "Contraseña temporal al crear usuario",
+          "descripcion": "Al crear un nuevo usuario administrador, el sistema genera una contraseña temporal. Esta contraseña debe ser comunicada al nuevo usuario de forma segura.",
+          "historias_afectadas": ["US-012"],
+          "tipo": "seguridad",
+          "prioridad": "Should"
+        },
+        {
+          "id": "RN-034",
+          "titulo": "Correo de admin debe ser único en la plataforma",
+          "descripcion": "No pueden existir dos usuarios administradores (de la misma o diferente empresa) con el mismo correo electrónico. El correo es el identificador único de autenticación.",
+          "historias_afectadas": ["US-012"],
+          "tipo": "unicidad",
+          "prioridad": "Should"
+        },
+        {
+          "id": "RN-035",
+          "titulo": "Sesión de admin expira por inactividad",
+          "descripcion": "La sesión de un administrador de empresa en el panel admin expira después de un período de inactividad configurable. Al expirar, el usuario debe autenticarse nuevamente.",
+          "historias_afectadas": ["US-013"],
+          "tipo": "seguridad-sesión",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-036",
+          "titulo": "Error de login sin revelar campo específico",
+          "descripcion": "Ante credenciales inválidas, el sistema muestra un mensaje genérico ('Correo o contraseña incorrectos') sin indicar cuál de los dos campos es el incorrecto. Esto evita ataques de enumeración.",
+          "historias_afectadas": ["US-013", "US-016"],
+          "tipo": "seguridad",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-037",
+          "titulo": "Panel admin requiere autenticación",
+          "descripcion": "Cualquier ruta del panel administrativo que no sea la página de login requiere que el usuario esté autenticado. Sin autenticación, se redirige automáticamente al login.",
+          "historias_afectadas": ["US-013"],
+          "tipo": "control-acceso",
+          "prioridad": "Must"
+        }
+      ]
+    },
+    "EP-05_super_admin": {
+      "nombre": "Super Admin - Gestión de Plataforma",
+      "reglas": [
+        {
+          "id": "RN-038",
+          "titulo": "Subdominio: formato válido",
+          "descripcion": "El subdominio de una empresa solo puede contener letras minúsculas (a-z), números (0-9) y guiones (-). No acepta espacios, mayúsculas, caracteres especiales ni guiones al inicio o final.",
+          "historias_afectadas": ["US-014"],
+          "tipo": "validación",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-039",
+          "titulo": "Subdominio único en la plataforma",
+          "descripcion": "No pueden existir dos empresas con el mismo subdominio. El sistema valida la unicidad antes de crear la empresa y muestra error si el subdominio ya está en uso.",
+          "historias_afectadas": ["US-014"],
+          "tipo": "unicidad",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-040",
+          "titulo": "Subdominio activo inmediatamente al crear empresa",
+          "descripcion": "Una vez creada la empresa, su subdominio queda activo de inmediato. El portal público de la empresa es accesible en cuanto se completa la creación.",
+          "historias_afectadas": ["US-014"],
+          "tipo": "disponibilidad",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-041",
+          "titulo": "Admin inicial creado con contraseña temporal",
+          "descripcion": "Al crear una empresa, el sistema genera automáticamente el usuario administrador inicial con los datos proporcionados (nombre, correo) y una contraseña temporal aleatoria. Las credenciales se muestran al super admin al confirmar la creación.",
+          "historias_afectadas": ["US-014"],
+          "tipo": "creación-automática",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-042",
+          "titulo": "Empresa desactivada muestra 503",
+          "descripcion": "Si el super admin desactiva una empresa, su portal público deja de estar accesible y muestra una página de error 503 (servicio no disponible) o mantenimiento. Los datos de la empresa se preservan.",
+          "historias_afectadas": ["US-015"],
+          "tipo": "visibilidad",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-043",
+          "titulo": "Cambio de subdominio requiere confirmación explícita",
+          "descripcion": "Cambiar el subdominio de una empresa es una operación de alto impacto (cambia todas las URLs de la tienda). Requiere un flujo de confirmación explícito y diferenciado del resto de ediciones. El super admin debe confirmar que entiende las consecuencias.",
+          "historias_afectadas": ["US-015"],
+          "tipo": "protección",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-044",
+          "titulo": "Separación estricta de roles super admin / admin empresa",
+          "descripcion": "Un super admin no puede acceder al panel administrativo de empresa y viceversa. Son roles completamente separados con accesos a URLs/subdominios distintos. Las credenciales de un rol no funcionan en el otro.",
+          "historias_afectadas": ["US-013", "US-016"],
+          "tipo": "control-acceso",
+          "prioridad": "Must"
+        },
+        {
+          "id": "RN-045",
+          "titulo": "Panel super admin en URL diferenciada",
+          "descripcion": "El panel de super admin está en una URL/subdominio diferente al panel de empresa. Esta separación es funcional y no solo visual.",
+          "historias_afectadas": ["US-016"],
+          "tipo": "arquitectura",
+          "prioridad": "Must"
+        }
+      ]
+    }
+  }
+}
